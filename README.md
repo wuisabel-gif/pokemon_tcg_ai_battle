@@ -31,13 +31,19 @@ highest-scoring ones. See `submission/cg/api.py` for the full `Observation` stru
 ## Testing locally
 
 Requires Docker Desktop running (the engine is a Linux x86-64 `.so`; it's emulated on
-Apple Silicon — slower but works).
+Apple Silicon — slower but works). All args pass through to `tools/run_match.py`.
 
 ```bash
-./tools/test_local.sh 20      # play 20 games vs a random opponent
+./tools/test_local.sh                              # submission vs random, 20 games
+./tools/test_local.sh --a submission --b random  -n 30
+./tools/test_local.sh --a submission --b baseline -n 40   # head-to-head vs the frozen baseline
 ```
 
-A healthy agent beats the random opponent ~85%+.
+- `baseline/` is a frozen snapshot of the original sample agent. When you improve
+  `submission/`, run it against `baseline` to measure whether the change actually helps.
+- Output reports **per-seat** win rate. This matters: going first is a big advantage in
+  this game (the sample beats random ~100% as P0 but ~60% as P1), so always judge a
+  change by its per-seat numbers, not the blended total.
 
 ## Submitting to Kaggle
 
