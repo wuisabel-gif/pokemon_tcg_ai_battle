@@ -3,6 +3,11 @@ import sys
 from collections import defaultdict
 
 from cg.api import AreaType, CardType, EnergyType, Observation, SelectContext, OptionType, Card, Pokemon, all_card_data, to_observation_class
+try:
+    from cg.api import search_begin, search_step, search_end
+    _SEARCH_AVAILABLE = True
+except Exception:
+    _SEARCH_AVAILABLE = False
 
 """
 Mega Lucario ex Deck
@@ -115,6 +120,127 @@ def pokemon_score(pokemon: Pokemon) -> int:
     return score
 
 
+# ---------------------------------------------------------------------------
+# Search-backed attack evaluation.
+#
+# At the "which attack?" decision, instead of trusting the hand-coded damage
+# guesses, we use the engine's Search API to actually simulate each candidate
+# attack to resolution and read the true outcome (prizes taken + damage). Any
+# failure falls back silently to the heuristic — a crash would forfeit the game.
+# ---------------------------------------------------------------------------
+FILLER_ENERGY = Basic_Fighting_Energy  # harmless filler for opponent's hidden zones
+
+
+def _predict_my_hidden(obs: Observation):
+    """Predict my own deck+prize cards: full deck minus everything visible."""
+    st = obs.current
+    me = st.players[st.yourIndex]
+    counts = {}
+    for cid in my_deck:
+        counts[cid] = counts.get(cid, 0) + 1
+
+    def rm(cid):
+        if counts.get(cid, 0) > 0:
+            counts[cid] -= 1
+
+    def rm_pkmn(p):
+        rm(p.id)
+        for c in p.energyCards: rm(c.id)
+        for c in p.tools: rm(c.id)
+        for c in p.preEvolution: rm(c.id)
+
+    for c in (me.hand or []): rm(c.id)
+    for c in me.discard: rm(c.id)
+    for p in me.active:
+        if p: rm_pkmn(p)
+    for p in me.bench: rm_pkmn(p)
+
+    hidden = []
+    for cid, n in counts.items():
+        hidden += [cid] * n
+    prize_n = len(me.prize)
+    return hidden[prize_n:], hidden[:prize_n]  # (your_deck, your_prize)
+
+
+def _sim_attack_value(obs: Observation, attack_option_index: int) -> tuple:
+    """Simulate one candidate attack to resolution; return (prizes_taken, damage).
+
+    Returns None if the simulation can't be carried out.
+    """
+    st = obs.current
+    my_index = st.yourIndex
+    me = st.players[my_index]
+    opp = st.players[1 - my_index]
+    prize_before = len(me.prize)
+    opp_active_hp_before = opp.active[0].hp if (opp.active and opp.active[0]) else 0
+
+    your_deck, your_prize = _predict_my_hidden(obs)
+    opp_active_pred = [] if (opp.active and opp.active[0]) else [Riolu]
+    root = search_begin(
+        obs,
+        your_deck=your_deck,
+        your_prize=your_prize,
+        opponent_deck=[FILLER_ENERGY] * opp.deckCount or [Riolu],
+        opponent_prize=[FILLER_ENERGY] * len(opp.prize),
+        opponent_hand=[FILLER_ENERGY] * opp.handCount,
+        opponent_active=opp_active_pred,
+    )
+    cur = search_step(root.searchId, [attack_option_index])
+    sid = cur.searchId
+    obs2 = cur.observation
+    # Auto-resolve any follow-up sub-selections (targets, coins, damage placement)
+    # until our turn ends, using a simple "take the first legal picks" policy.
+    for _ in range(30):
+        s = obs2.select
+        c = obs2.current
+        if s is None or (c and c.result >= 0):
+            break
+        if c and c.yourIndex != my_index:
+            break  # our turn resolved; opponent now to act
+        pick = list(range(min(s.maxCount, len(s.option))))
+        if len(pick) < s.minCount:
+            pick = list(range(s.minCount))
+        cur = search_step(sid, pick)
+        sid = cur.searchId
+        obs2 = cur.observation
+
+    c = obs2.current
+    if c is None:
+        return None
+    sim_me = c.players[my_index]
+    sim_opp = c.players[1 - my_index]
+    prizes_taken = prize_before - len(sim_me.prize)
+    if sim_opp.active and sim_opp.active[0]:
+        damage = opp_active_hp_before - sim_opp.active[0].hp
+    else:
+        damage = opp_active_hp_before  # active gone => treat as full damage / KO
+    return (prizes_taken, damage)
+
+
+def search_attack_values(obs: Observation) -> dict:
+    """For an ATTACK-context observation, return {option_index: value} from real
+    simulation, or {} if search is unavailable/failed."""
+    if not _SEARCH_AVAILABLE or not obs.search_begin_input:
+        return {}
+    try:
+        values = {}
+        for i, o in enumerate(obs.select.option):
+            if o.type != OptionType.ATTACK:
+                continue
+            res = _sim_attack_value(obs, i)
+            if res is not None:
+                prizes, damage = res
+                values[i] = prizes * 1_000_000 + damage
+        search_end()
+        return values
+    except Exception:
+        try:
+            search_end()
+        except Exception:
+            pass
+        return {}
+
+
 def agent(obs_dict: dict) -> list[int]:
     """Main Agent Function.
 
@@ -138,6 +264,13 @@ def agent(obs_dict: dict) -> list[int]:
     my_state = state.players[my_index]
     op_state = state.players[1 - my_index]
     my_prize = len(my_state.prize)
+
+    # Search-backed evaluation of the available attacks. Attacks are offered at
+    # the MAIN context (as ATTACK options), so trigger whenever any is present.
+    # Empty dict if search is unavailable or fails -> falls back to heuristic.
+    _has_attack_option = any(o.type == OptionType.ATTACK for o in select.option)
+    search_attack_vals = search_attack_values(obs) if _has_attack_option else {}
+    _best_attack_i = max(search_attack_vals, key=search_attack_vals.get) if search_attack_vals else -1
 
     global plan
     global pre_turn
@@ -327,7 +460,7 @@ def agent(obs_dict: dict) -> list[int]:
 
     # Iterate over every possible option and assign a heuristic score.
     scores = []  # Score for each action
-    for o in select.option:
+    for i, o in enumerate(select.option):
         score = 0  # The default and baseline score is 0.
         if o.type == OptionType.NUMBER:
             score = o.number  # e.g., for "draw X cards"
@@ -488,7 +621,13 @@ def agent(obs_dict: dict) -> list[int]:
                 score = -1
         elif o.type == OptionType.ATTACK:
             score = 1000
-            if plan.attack_index == 1:
+            if search_attack_vals:
+                # Pick WHICH attack by real simulated outcome, but keep the score
+                # in the original ~1000-1200 band so search only chooses among
+                # attacks and doesn't override the attack-vs-setup ordering.
+                if i == _best_attack_i:
+                    score += 200
+            elif plan.attack_index == 1:
                 if o.attackId == 983:  # Mega Brave
                     score += 100
             else:
