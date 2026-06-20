@@ -1,0 +1,25 @@
+# === Secrets — NEVER commit ===
+.env
+kaggle.json
+access_token
+*.pem
+*.key
+
+# === Oversized files (exceed GitHub's 100MB limit) ===
+Card_ID List_EN.pdf
+Card_ID List_JP.pdf
+*.pdf
+
+# === Downloaded Kaggle artifacts (not our code) ===
+kaggle_code/
+rl_mcts_test/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# === OS ===
+.DS_Store
