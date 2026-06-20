@@ -162,17 +162,18 @@ def _predict_my_hidden(obs: Observation):
     return hidden[prize_n:], hidden[:prize_n]  # (your_deck, your_prize)
 
 
-def _sim_attack_value(obs: Observation, attack_option_index: int) -> tuple:
-    """Simulate one candidate attack to resolution; return (prizes_taken, damage).
+def _sim_from(obs: Observation, first_pick: list) -> tuple:
+    """Simulate making `first_pick` now, then auto-resolving the rest of our turn
+    (preferring to attack), and return (prizes_taken, opp_active_remaining_hp).
 
-    Returns None if the simulation can't be carried out.
+    Returns None if the simulation can't be carried out. A KO shows up as a higher
+    prizes_taken; among non-KO lines, lower remaining HP means more damage.
     """
     st = obs.current
     my_index = st.yourIndex
     me = st.players[my_index]
     opp = st.players[1 - my_index]
     prize_before = len(me.prize)
-    opp_active_hp_before = opp.active[0].hp if (opp.active and opp.active[0]) else 0
 
     your_deck, your_prize = _predict_my_hidden(obs)
     opp_active_pred = [] if (opp.active and opp.active[0]) else [Riolu]
@@ -185,21 +186,27 @@ def _sim_attack_value(obs: Observation, attack_option_index: int) -> tuple:
         opponent_hand=[FILLER_ENERGY] * opp.handCount,
         opponent_active=opp_active_pred,
     )
-    cur = search_step(root.searchId, [attack_option_index])
+    cur = search_step(root.searchId, first_pick)
     sid = cur.searchId
     obs2 = cur.observation
-    # Auto-resolve any follow-up sub-selections (targets, coins, damage placement)
-    # until our turn ends, using a simple "take the first legal picks" policy.
-    for _ in range(30):
+    # Auto-resolve follow-ups (attack if offered, else first legal picks) until
+    # our turn ends.
+    for _ in range(40):
         s = obs2.select
         c = obs2.current
         if s is None or (c and c.result >= 0):
             break
         if c and c.yourIndex != my_index:
             break  # our turn resolved; opponent now to act
-        pick = list(range(min(s.maxCount, len(s.option))))
-        if len(pick) < s.minCount:
-            pick = list(range(s.minCount))
+        pick = None
+        for idx, op in enumerate(s.option):
+            if op.type == OptionType.ATTACK:
+                pick = [idx]
+                break
+        if pick is None:
+            pick = list(range(min(s.maxCount, len(s.option))))
+            if len(pick) < s.minCount:
+                pick = list(range(s.minCount))
         cur = search_step(sid, pick)
         sid = cur.searchId
         obs2 = cur.observation
@@ -210,15 +217,21 @@ def _sim_attack_value(obs: Observation, attack_option_index: int) -> tuple:
     sim_me = c.players[my_index]
     sim_opp = c.players[1 - my_index]
     prizes_taken = prize_before - len(sim_me.prize)
-    if sim_opp.active and sim_opp.active[0]:
-        damage = opp_active_hp_before - sim_opp.active[0].hp
-    else:
-        damage = opp_active_hp_before  # active gone => treat as full damage / KO
-    return (prizes_taken, damage)
+    remaining_hp = sim_opp.active[0].hp if (sim_opp.active and sim_opp.active[0]) else 0
+    return (prizes_taken, remaining_hp)
+
+
+def _sim_value(obs: Observation, first_pick: list):
+    res = _sim_from(obs, first_pick)
+    if res is None:
+        return None
+    prizes, remaining_hp = res
+    # Prizes dominate; among equal-prize lines prefer leaving the active lower.
+    return prizes * 1_000_000 - remaining_hp
 
 
 def search_attack_values(obs: Observation) -> dict:
-    """For an ATTACK-context observation, return {option_index: value} from real
+    """For options that include attacks, return {option_index: value} from real
     simulation, or {} if search is unavailable/failed."""
     if not _SEARCH_AVAILABLE or not obs.search_begin_input:
         return {}
@@ -227,10 +240,33 @@ def search_attack_values(obs: Observation) -> dict:
         for i, o in enumerate(obs.select.option):
             if o.type != OptionType.ATTACK:
                 continue
-            res = _sim_attack_value(obs, i)
-            if res is not None:
-                prizes, damage = res
-                values[i] = prizes * 1_000_000 + damage
+            v = _sim_value(obs, [i])
+            if v is not None:
+                values[i] = v
+        search_end()
+        return values
+    except Exception:
+        try:
+            search_end()
+        except Exception:
+            pass
+        return {}
+
+
+def search_drag_target_values(obs: Observation, my_index: int) -> dict:
+    """When choosing which opponent Pokémon to drag to the Active Spot (Boss's
+    Orders / switch effects), simulate dragging each candidate and then attacking,
+    returning {option_index: value}. {} if unavailable/failed."""
+    if not _SEARCH_AVAILABLE or not obs.search_begin_input:
+        return {}
+    try:
+        values = {}
+        for i, o in enumerate(obs.select.option):
+            if o.type != OptionType.CARD or o.playerIndex == my_index:
+                continue
+            v = _sim_value(obs, [i])
+            if v is not None:
+                values[i] = v
         search_end()
         return values
     except Exception:
@@ -271,6 +307,14 @@ def agent(obs_dict: dict) -> list[int]:
     _has_attack_option = any(o.type == OptionType.ATTACK for o in select.option)
     search_attack_vals = search_attack_values(obs) if _has_attack_option else {}
     _best_attack_i = max(search_attack_vals, key=search_attack_vals.get) if search_attack_vals else -1
+
+    # Search-backed opponent-target selection (Boss's Orders / switch snipes):
+    # simulate dragging each candidate opponent Pokémon up and attacking it.
+    _is_drag = context == SelectContext.SWITCH or context == SelectContext.TO_ACTIVE
+    _has_opp_target = _is_drag and any(
+        o.type == OptionType.CARD and o.playerIndex != my_index for o in select.option)
+    search_drag_vals = search_drag_target_values(obs, my_index) if _has_opp_target else {}
+    _best_drag_i = max(search_drag_vals, key=search_drag_vals.get) if search_drag_vals else -1
 
     global plan
     global pre_turn
@@ -492,7 +536,10 @@ def agent(obs_dict: dict) -> list[int]:
                         elif card.id == Riolu:
                             score += 4
                     else:
-                        if o.index == plan.target - 1:
+                        if search_drag_vals:
+                            if i == _best_drag_i:
+                                score += 100
+                        elif o.index == plan.target - 1:
                             score += 100
                 elif context == SelectContext.SETUP_ACTIVE_POKEMON:
                     # Prioritize playing Riolu if going first, and Solrock if going second.
