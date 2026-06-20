@@ -1,5 +1,7 @@
 import os
 import sys
+import time
+import dataclasses
 from collections import defaultdict
 
 from cg.api import AreaType, CardType, EnergyType, Observation, SelectContext, OptionType, Card, Pokemon, all_card_data, to_observation_class
@@ -121,160 +123,131 @@ def pokemon_score(pokemon: Pokemon) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Search-backed attack evaluation.
+# v2: full-turn rollout search.
 #
-# At the "which attack?" decision, instead of trusting the hand-coded damage
-# guesses, we use the engine's Search API to actually simulate each candidate
-# attack to resolution and read the true outcome (prizes taken + damage). Any
-# failure falls back silently to the heuristic — a crash would forfeit the game.
+# At each MAIN decision we take the heuristic's top few candidate actions, and
+# for each one simulate (that action + the heuristic playing out the rest of the
+# turn) with the engine's Search API, then score the end-of-turn position. We
+# play the action with the best simulated outcome. The heuristic is the rollout
+# policy; `_in_rollout` stops the rollout from recursively searching.
+# Everything is wrapped so any failure falls back to the pure heuristic.
 # ---------------------------------------------------------------------------
-FILLER_ENERGY = Basic_Fighting_Energy  # harmless filler for opponent's hidden zones
+FILLER_ENERGY = Basic_Fighting_Energy
+_in_rollout = False
+_SEARCH_TOPK = 3            # candidate first-actions to evaluate
+_SEARCH_TIME_BUDGET = 0.6   # seconds per MAIN decision (well within the 600s pool)
 
 
 def _predict_my_hidden(obs: Observation):
-    """Predict my own deck+prize cards: full deck minus everything visible."""
     st = obs.current
     me = st.players[st.yourIndex]
     counts = {}
     for cid in my_deck:
         counts[cid] = counts.get(cid, 0) + 1
-
-    def rm(cid):
-        if counts.get(cid, 0) > 0:
-            counts[cid] -= 1
-
-    def rm_pkmn(p):
+    def rm(c):
+        if counts.get(c, 0) > 0: counts[c] -= 1
+    def rmp(p):
         rm(p.id)
         for c in p.energyCards: rm(c.id)
         for c in p.tools: rm(c.id)
         for c in p.preEvolution: rm(c.id)
-
     for c in (me.hand or []): rm(c.id)
     for c in me.discard: rm(c.id)
     for p in me.active:
-        if p: rm_pkmn(p)
-    for p in me.bench: rm_pkmn(p)
-
-    hidden = []
-    for cid, n in counts.items():
-        hidden += [cid] * n
-    prize_n = len(me.prize)
-    return hidden[prize_n:], hidden[:prize_n]  # (your_deck, your_prize)
+        if p: rmp(p)
+    for p in me.bench: rmp(p)
+    h = [c for cid, n in counts.items() for c in [cid] * n]
+    pn = len(me.prize)
+    return h[pn:], h[:pn]
 
 
-def _sim_from(obs: Observation, first_pick: list) -> tuple:
-    """Simulate making `first_pick` now, then auto-resolving the rest of our turn
-    (preferring to attack), and return (prizes_taken, opp_active_remaining_hp).
+def _position_value(state, mi: int) -> float:
+    """Score an end-of-my-turn state from my perspective (higher = better)."""
+    if state is None:
+        return -1e18
+    if state.result == mi:
+        return 1e15
+    if state.result == (1 - mi):
+        return -1e15
+    me = state.players[mi]
+    opp = state.players[1 - mi]
+    v = -len(me.prize) * 1_000_000      # prizes I've taken (fewer left = better)
+    oa = opp.active[0] if (opp.active and opp.active[0]) else None
+    if oa:
+        v -= oa.hp * 10                 # damage on opponent's active
+    ma = me.active[0] if (me.active and me.active[0]) else None
+    if ma:
+        v += len(ma.energies) * 60 + ma.hp   # a charged, healthy attacker for next turn
+    v += len(me.bench) * 5              # board presence
+    return v
 
-    Returns None if the simulation can't be carried out. A KO shows up as a higher
-    prizes_taken; among non-KO lines, lower remaining HP means more damage.
-    """
+
+def _rollout_value(obs: Observation, first_action: int) -> float:
+    """Simulate first_action, then the heuristic playing out the rest of my turn;
+    return the end-of-turn position value. Caller must wrap in try/except."""
+    global _in_rollout
     st = obs.current
-    my_index = st.yourIndex
-    me = st.players[my_index]
-    opp = st.players[1 - my_index]
-    prize_before = len(me.prize)
-
-    your_deck, your_prize = _predict_my_hidden(obs)
-    opp_active_pred = [] if (opp.active and opp.active[0]) else [Riolu]
+    mi = st.yourIndex
+    opp = st.players[1 - mi]
+    yd, yp = _predict_my_hidden(obs)
+    oap = [] if (opp.active and opp.active[0]) else [Riolu]
     root = search_begin(
-        obs,
-        your_deck=your_deck,
-        your_prize=your_prize,
+        obs, your_deck=yd, your_prize=yp,
         opponent_deck=[FILLER_ENERGY] * opp.deckCount or [Riolu],
         opponent_prize=[FILLER_ENERGY] * len(opp.prize),
         opponent_hand=[FILLER_ENERGY] * opp.handCount,
-        opponent_active=opp_active_pred,
+        opponent_active=oap,
     )
-    cur = search_step(root.searchId, first_pick)
-    sid = cur.searchId
-    obs2 = cur.observation
-    # Auto-resolve follow-ups (attack if offered, else first legal picks) until
-    # our turn ends.
-    for _ in range(40):
-        s = obs2.select
-        c = obs2.current
-        if s is None or (c and c.result >= 0):
-            break
-        if c and c.yourIndex != my_index:
-            break  # our turn resolved; opponent now to act
-        pick = None
-        for idx, op in enumerate(s.option):
-            if op.type == OptionType.ATTACK:
-                pick = [idx]
+    ss = search_step(root.searchId, [first_action])
+    sid = ss.searchId
+    sim = ss.observation
+    _in_rollout = True
+    try:
+        for _ in range(50):
+            s = sim.select
+            c = sim.current
+            if s is None or (c and c.result >= 0):
                 break
-        if pick is None:
-            pick = list(range(min(s.maxCount, len(s.option))))
-            if len(pick) < s.minCount:
-                pick = list(range(s.minCount))
-        cur = search_step(sid, pick)
-        sid = cur.searchId
-        obs2 = cur.observation
-
-    c = obs2.current
-    if c is None:
-        return None
-    sim_me = c.players[my_index]
-    sim_opp = c.players[1 - my_index]
-    prizes_taken = prize_before - len(sim_me.prize)
-    remaining_hp = sim_opp.active[0].hp if (sim_opp.active and sim_opp.active[0]) else 0
-    return (prizes_taken, remaining_hp)
+            if c and c.yourIndex != mi:
+                break
+            act = agent(dataclasses.asdict(sim))   # heuristic move (no nested search)
+            ss = search_step(sid, act)
+            sid = ss.searchId
+            sim = ss.observation
+    finally:
+        _in_rollout = False
+    return _position_value(sim.current, mi)
 
 
-def _sim_value(obs: Observation, first_pick: list):
-    res = _sim_from(obs, first_pick)
-    if res is None:
-        return None
-    prizes, remaining_hp = res
-    # Prizes dominate; among equal-prize lines prefer leaving the active lower.
-    return prizes * 1_000_000 - remaining_hp
-
-
-def search_attack_values(obs: Observation) -> dict:
-    """For options that include attacks, return {option_index: value} from real
-    simulation, or {} if search is unavailable/failed."""
-    if not _SEARCH_AVAILABLE or not obs.search_begin_input:
-        return {}
+def _search_best_main(obs: Observation, desc_indices: list) -> int | None:
+    """Return the top-K candidate first-action with the best rollout value, or None."""
+    global plan, pre_turn, ability_used
+    saved = (plan, pre_turn, ability_used)
+    heur_idx = desc_indices[0]
+    heur_val = None
+    best_idx, best_val = None, None
+    deadline = time.time() + _SEARCH_TIME_BUDGET
     try:
-        values = {}
-        for i, o in enumerate(obs.select.option):
-            if o.type != OptionType.ATTACK:
-                continue
-            v = _sim_value(obs, [i])
-            if v is not None:
-                values[i] = v
-        search_end()
-        return values
-    except Exception:
+        for idx in desc_indices[:_SEARCH_TOPK]:
+            if time.time() > deadline and best_idx is not None:
+                break
+            v = _rollout_value(obs, idx)
+            if idx == heur_idx:
+                heur_val = v
+            if best_val is None or v > best_val:
+                best_val, best_idx = v, idx
+    finally:
         try:
             search_end()
         except Exception:
             pass
-        return {}
-
-
-def search_drag_target_values(obs: Observation, my_index: int) -> dict:
-    """When choosing which opponent Pokémon to drag to the Active Spot (Boss's
-    Orders / switch effects), simulate dragging each candidate and then attacking,
-    returning {option_index: value}. {} if unavailable/failed."""
-    if not _SEARCH_AVAILABLE or not obs.search_begin_input:
-        return {}
-    try:
-        values = {}
-        for i, o in enumerate(obs.select.option):
-            if o.type != OptionType.CARD or o.playerIndex == my_index:
-                continue
-            v = _sim_value(obs, [i])
-            if v is not None:
-                values[i] = v
-        search_end()
-        return values
-    except Exception:
-        try:
-            search_end()
-        except Exception:
-            pass
-        return {}
+        plan, pre_turn, ability_used = saved   # rollouts clobbered these globals
+    # Only override the heuristic when search proves a line that takes at least
+    # one MORE prize this turn (>= 1_000_000). Otherwise trust the heuristic,
+    # which is better at nuanced setup than our crude position value.
+    if best_idx is not None and heur_val is not None and best_val >= heur_val + 1_000_000:
+        return best_idx
+    return heur_idx
 
 
 def agent(obs_dict: dict) -> list[int]:
@@ -300,21 +273,6 @@ def agent(obs_dict: dict) -> list[int]:
     my_state = state.players[my_index]
     op_state = state.players[1 - my_index]
     my_prize = len(my_state.prize)
-
-    # Search-backed evaluation of the available attacks. Attacks are offered at
-    # the MAIN context (as ATTACK options), so trigger whenever any is present.
-    # Empty dict if search is unavailable or fails -> falls back to heuristic.
-    _has_attack_option = any(o.type == OptionType.ATTACK for o in select.option)
-    search_attack_vals = search_attack_values(obs) if _has_attack_option else {}
-    _best_attack_i = max(search_attack_vals, key=search_attack_vals.get) if search_attack_vals else -1
-
-    # Search-backed opponent-target selection (Boss's Orders / switch snipes):
-    # simulate dragging each candidate opponent Pokémon up and attacking it.
-    _is_drag = context == SelectContext.SWITCH or context == SelectContext.TO_ACTIVE
-    _has_opp_target = _is_drag and any(
-        o.type == OptionType.CARD and o.playerIndex != my_index for o in select.option)
-    search_drag_vals = search_drag_target_values(obs, my_index) if _has_opp_target else {}
-    _best_drag_i = max(search_drag_vals, key=search_drag_vals.get) if search_drag_vals else -1
 
     global plan
     global pre_turn
@@ -504,7 +462,7 @@ def agent(obs_dict: dict) -> list[int]:
 
     # Iterate over every possible option and assign a heuristic score.
     scores = []  # Score for each action
-    for i, o in enumerate(select.option):
+    for o in select.option:
         score = 0  # The default and baseline score is 0.
         if o.type == OptionType.NUMBER:
             score = o.number  # e.g., for "draw X cards"
@@ -536,10 +494,7 @@ def agent(obs_dict: dict) -> list[int]:
                         elif card.id == Riolu:
                             score += 4
                     else:
-                        if search_drag_vals:
-                            if i == _best_drag_i:
-                                score += 100
-                        elif o.index == plan.target - 1:
+                        if o.index == plan.target - 1:
                             score += 100
                 elif context == SelectContext.SETUP_ACTIVE_POKEMON:
                     # Prioritize playing Riolu if going first, and Solrock if going second.
@@ -668,13 +623,7 @@ def agent(obs_dict: dict) -> list[int]:
                 score = -1
         elif o.type == OptionType.ATTACK:
             score = 1000
-            if search_attack_vals:
-                # Pick WHICH attack by real simulated outcome, but keep the score
-                # in the original ~1000-1200 band so search only chooses among
-                # attacks and doesn't override the attack-vs-setup ordering.
-                if i == _best_attack_i:
-                    score += 200
-            elif plan.attack_index == 1:
+            if plan.attack_index == 1:
                 if o.attackId == 983:  # Mega Brave
                     score += 100
             else:
@@ -685,6 +634,21 @@ def agent(obs_dict: dict) -> list[int]:
 
     # Select in descending order of score
     desc_indices = [i for i, _ in sorted(enumerate(scores), key=lambda x: x[1], reverse=True)]
+
+    # v2: at MAIN, let full-turn rollout search pick among the top heuristic
+    # actions. Skipped during rollouts (_in_rollout) and on any failure.
+    if (context == SelectContext.MAIN and select.maxCount == 1 and len(desc_indices) > 1
+            and _SEARCH_AVAILABLE and not _in_rollout and obs.search_begin_input):
+        try:
+            best = _search_best_main(obs, desc_indices)
+            if best is not None:
+                desc_indices = [best] + [i for i in desc_indices if i != best]
+        except Exception:
+            try:
+                search_end()
+            except Exception:
+                pass
+
     if context == SelectContext.MAIN:
         o = select.option[desc_indices[0]]
         if o.type == OptionType.ABILITY:
