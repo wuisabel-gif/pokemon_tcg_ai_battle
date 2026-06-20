@@ -1,44 +1,45 @@
 # Submitting your agent to Kaggle
 
-The competition (`pokemon-tcg-ai-battle`) does **not** take a plain file upload.
-You submit a **Kaggle notebook** that builds `submission.tar.gz`, then click
-**Submit Agent**. The tarball must contain exactly three things at its root:
+This competition (`pokemon-tcg-ai-battle`) accepts a **direct tarball submission via
+the Kaggle CLI** — no notebook required. The tarball must contain exactly these three
+things at its root:
 
 ```
 submission.tar.gz
-├── main.py      # your agent (submission/main.py in this repo)
-├── deck.csv     # your deck (submission/deck.csv)
-└── cg/          # the game engine (from the kiyotah/cg-lib dataset)
+├── main.py      # your agent  (submission/main.py)
+├── deck.csv     # your deck   (submission/deck.csv)
+└── cg/          # the game engine (submission/cg/, Linux .so)
 ```
 
-## Easiest path — fork the sample notebook
+## One command
 
-1. Open the competition → **Code** tab → **"A Sample Rule-Based Agent Mega Lucario ex Deck"**.
-2. Click **Copy & Edit** (forks it into your account, already wired to the `cg-lib`
-   dataset and the deck).
-3. Replace the contents of the `%%writefile main.py` cell with your edited
-   `submission/main.py`, and the deck cell / `deck.csv` with your `submission/deck.csv`.
-4. **Run All** → it produces `submission.tar.gz`.
-5. **Save Version** (commit the notebook).
-6. Competition page → **Submit Agent** → pick your notebook → submit.
-
-## Notebook packaging cell (reference)
-
-This is the cell that builds the tarball (from the sample):
-
-```python
-import glob, os, tarfile
-with tarfile.open("submission.tar.gz", "w:gz") as tar:
-    tar.add("main.py", arcname="main.py")
-    tar.add(glob.glob('/kaggle/input/**/cg-lib/cg', recursive=True)[0], arcname="cg")
-    tar.add(glob.glob('/kaggle/input/datasets/**/deck.csv', recursive=True)[0], arcname="deck.csv")
-os.remove('main.py')
+```bash
+./tools/submit.sh "short description of this version"
 ```
 
-If you embed `deck.csv` directly in the notebook with `%%writefile deck.csv`, you can
-`tar.add("deck.csv", arcname="deck.csv")` instead of globbing a dataset.
+This builds a clean `submission.tar.gz` from `submission/` and submits it. Requires the
+Kaggle access token at `~/.kaggle/access_token`.
 
-## Submission limits
+## What it does under the hood
 
-Check the competition **Rules** tab for the daily submission limit before you burn
-attempts — iterate locally with `./tools/test_local.sh` first.
+```bash
+tar czf submission.tar.gz -C submission main.py deck.csv cg
+~/Library/Python/3.12/bin/kaggle competitions submit \
+    -c pokemon-tcg-ai-battle -f submission.tar.gz -m "your message"
+```
+
+## Checking status
+
+```bash
+~/Library/Python/3.12/bin/kaggle competitions submissions -c pokemon-tcg-ai-battle
+```
+
+A new submission shows `PENDING`, then gets a score once the matchmaking matches have
+run (agent competitions score by playing your agent against others — this is not
+instant). Watch the **Leaderboard** and **Submissions** tabs on the competition page.
+
+## Limits
+
+Check the competition **Rules** tab for the daily submission cap before burning
+attempts — iterate locally with `./tools/test_parallel.py` first, and only submit a
+version that beats `baseline` with the CI clearing 50%.
