@@ -17,6 +17,7 @@ Examples:
 """
 import os
 import sys
+import json
 import random
 import argparse
 import importlib.util
@@ -81,6 +82,8 @@ def main():
     ap.add_argument("--a", default="submission", help="agent A directory (the one under test)")
     ap.add_argument("--b", default="random", help="agent B directory, or 'random'")
     ap.add_argument("-n", type=int, default=20, help="number of games")
+    ap.add_argument("--json", action="store_true", help="print only a machine-readable RESULT line")
+    ap.add_argument("--quiet", action="store_true", help="suppress per-game progress")
     args = ap.parse_args()
 
     agent_a, deck_a = load_agent(args.a)
@@ -95,7 +98,15 @@ def main():
         wins += w
         seat_wins[a_index] += w
         seat_games[a_index] += 1
-        print(f"  game {g + 1}/{args.n} (A wins so far: {wins})", flush=True)
+        if not args.json and not args.quiet:
+            print(f"  game {g + 1}/{args.n} (A wins so far: {wins})", flush=True)
+
+    if args.json:
+        print("RESULT " + json.dumps({
+            "a": args.a, "b": args.b, "n": args.n, "wins": wins,
+            "seat_wins": seat_wins, "seat_games": seat_games,
+        }), flush=True)
+        return
 
     rate = wins / args.n
     print(f"\n[{args.a}] vs [{args.b}]: {wins}/{args.n} = {rate:.1%} win rate for A")

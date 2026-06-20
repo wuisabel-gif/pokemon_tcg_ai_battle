@@ -45,6 +45,20 @@ Apple Silicon — slower but works). All args pass through to `tools/run_match.p
   this game (the sample beats random ~100% as P0 but ~60% as P1), so always judge a
   change by its per-seat numbers, not the blended total.
 
+### Fast, statistically sound testing (recommended)
+
+Win rate is high-variance — a true 50/50 mirror swings 30–70% over 10 games. To tell a
+real improvement from noise you need a big sample. `tools/test_parallel.py` fans out
+Docker workers (the engine is entropy-seeded per process, so workers are independent)
+and reports a **95% confidence interval** plus a verdict:
+
+```bash
+python3 tools/test_parallel.py --a submission --b baseline -n 1000 -j 6
+```
+
+~1000 games runs in ~20s once the image is cached. A change is only "real" when the
+CI clears 50%. Rule of thumb: ~200 games detects ~7%+ effects; ~1000 games detects ~3%.
+
 ## Submitting to Kaggle
 
 See [SUBMITTING.md](SUBMITTING.md). In short: a Kaggle notebook packages
