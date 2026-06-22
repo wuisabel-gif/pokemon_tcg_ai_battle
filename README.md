@@ -1,6 +1,40 @@
 # Pokémon TCG AI Battle
 
-My agent for the Kaggle competition **[The Pokémon Company – PTCG AI Battle Challenge Simulation](https://www.kaggle.com/competitions/pokemon-tcg-ai-battle)** (slug: `pokemon-tcg-ai-battle`).
+An agent that plays Pokémon Trading Card Game, built for the Kaggle competition
+**[The Pokémon Company – PTCG AI Battle Challenge Simulation](https://www.kaggle.com/competitions/pokemon-tcg-ai-battle)**
+(slug: `pokemon-tcg-ai-battle`).
+
+The competition isn't a prediction task — there's no dataset to fit. You submit an
+`agent(observation) -> action` function that plays full games against other people's
+agents, and a matchmaking rating decides your rank. The game has hidden information
+(you can't see the opponent's hand) and randomness (shuffles, coin flips), so the
+real problem is making good decisions under uncertainty and then *proving* your
+agent got better.
+
+This repo is the Mega Lucario ex agent plus the machinery around it: a Docker-based
+self-play harness that reports win rate with a 95% confidence interval, a one-command
+submitter, and tools that mine the competition's replay data for the winning
+metagame. The agent itself is a heuristic decision-maker; a full-turn lookahead
+(search) version lives on the `search-agent` branch.
+
+**Where it stands:** the agent sits mid-pack (~680 rating). Mining the replays
+surfaced the key lesson — the top players run the *same deck*, and an identical
+decklist scores ~1,100, so the gap is decision quality, not the cards. The full
+story, including every experiment that didn't work, is in
+**[LEARNINGS.md](LEARNINGS.md)**.
+
+## Quick start
+
+```bash
+# run 1000 self-play games vs the frozen baseline, with a confidence interval
+python3 tools/test_parallel.py --a submission --b baseline -n 1000 -j 6
+
+# package submission/ and submit to Kaggle
+./tools/submit.sh "your message"
+```
+
+Requires Docker (the engine is a Linux binary) and a Kaggle access token at
+`~/.kaggle/access_token`.
 
 ## What's here
 
