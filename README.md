@@ -85,6 +85,11 @@ flowchart TD
     G -->|Fail| C
 ```
 
+Mobile-friendly SVG exports are available here:
+
+- [Decision loop SVG](docs/diagrams/decision-loop.svg)
+- [Research pipeline SVG](docs/diagrams/research-pipeline.svg)
+
 ## What's here
 
 | Path | What it is |
