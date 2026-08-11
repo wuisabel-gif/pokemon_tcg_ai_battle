@@ -38,6 +38,31 @@ The research pipeline extends this baseline with:
 The neural MCTS path is an experimental research component and is not promoted to the
 submitted policy until it exceeds the heuristic baseline under controlled evaluation.
 
+### Decision loop
+
+```mermaid
+flowchart TD
+    A[Game observation] --> B[Legal action set]
+    B --> C[Deck-conditioned policy]
+    C --> D[Selected action]
+    D --> E[Game engine]
+    E --> A
+```
+
+### Research pipeline
+
+```mermaid
+flowchart TD
+    A[Replay JSON] --> B[Episode records]
+    B --> C[Behavior cloning data]
+    C --> D[Policy/value model]
+    D --> E[Bounded PUCT MCTS]
+    E --> F[Baseline evaluation]
+    F --> G{Improvement gate}
+    G -->|Pass| H[Candidate submission]
+    G -->|Fail| C
+```
+
 ## What's here
 
 | Path | What it is |
