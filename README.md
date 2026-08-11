@@ -40,6 +40,26 @@ The research pipeline extends this baseline with:
 The neural MCTS path is an experimental research component and is not promoted to the
 submitted policy until it exceeds the heuristic baseline under controlled evaluation.
 
+## Development roadmap
+
+The project follows a staged promotion process. Each phase must produce measurable
+evidence before the next policy change is submitted.
+
+| Phase | Focus | Promotion gate |
+|---|---|---|
+| **1. Correctness and observability** | Context-aware optional selections, fallback telemetry, replay alignment, and tactical regression fixtures. | Zero fallback activations in a large local evaluation; all returned actions legal. |
+| **2. Tactical intelligence** | Immediate-win checks, knockout thresholds, prize-race features, retreat risk, and state-dependent Trainer/Ability/Evolution decisions. | Improved per-seat and matchup results without a severe regression. |
+| **3. Opponent league evaluation** | Frozen baseline, previous submissions, mirror, and replay-mined archetype opponents. | Confidence intervals clear the baseline with no critical matchup collapse. |
+| **4. Replay learning** | Same-deck expert filtering, decision-difference audits, and legal-action behavior cloning. | Held-out episode agreement and win rate improve over the heuristic policy. |
+| **5. Focused search and value learning** | Policy/value modeling, plausible opponent replies, and narrow two-ply PUCT search. | Search improves the trained baseline under latency and reliability limits. |
+
+### Current decision
+
+The current priority is **Phase 1**. The latest lower Kaggle score should be treated as
+an evaluation signal, not proof that a particular heuristic is better or worse. Another
+submission should wait until optional-selection behavior and fallback counts have been
+tested locally against the opponent league.
+
 ### Decision loop
 
 ```mermaid
