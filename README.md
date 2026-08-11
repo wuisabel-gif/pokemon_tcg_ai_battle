@@ -15,6 +15,7 @@ analysis.
 | `submission/cg/` | The competition game engine (Linux `.so` + Python API). |
 | `tools/run_match.py` | Runs N local battles (our agent vs random) and reports win rate. |
 | `tools/test_local.sh` | Wraps the runner in a Linux Docker container (the engine can't load on macOS). |
+| `notebooks/kaggle_player_band_harvest.ipynb` | Compares replay-derived behavior across leaderboard performance bands. |
 | `sample_submission/` | The original untouched template from the competition. |
 | `EN_Card_Data.csv`, `JP_Card_Data.csv` | Card reference data. |
 
