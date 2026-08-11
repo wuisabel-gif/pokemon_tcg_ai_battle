@@ -76,6 +76,7 @@ flowchart TD
 | `tools/test_local.sh` | Wraps the runner in a Linux Docker container (the engine can't load on macOS). |
 | `tools/mcts_adapter.py` | Engine-independent bounded MCTS and model interface based on the Kaggle sample. |
 | `tools/scout_public_code.py` | Ranks and downloads public competition notebooks for code-pattern analysis. |
+| `tools/replay_diagnostics.py` | Pure-Python replay reports: matchup/context stats, same-deck filtering, and heuristic/public action comparison. |
 | `notebooks/kaggle_player_band_harvest.ipynb` | Compares replay-derived behavior across leaderboard performance bands. |
 | `notebooks/kaggle_score_monitor.ipynb` | Tracks public submission scores, leaderboard movement, and research signals over time. |
 | `notebooks/kaggle_submission_diagnostics.ipynb` | Connects Kaggle outcomes to local commits, archive hashes, and validation evidence. |
@@ -85,6 +86,24 @@ flowchart TD
 | `EN_Card_Data.csv`, `JP_Card_Data.csv` | Card reference data. |
 
 Not tracked in git (see `.gitignore`): secrets (`.env`, `kaggle.json`), the large card PDFs, and downloaded Kaggle artifacts (`kaggle_code/`, `rl_mcts_test/`).
+
+### Replay diagnostics (issues 6–9)
+
+The portable diagnostics tool does not import the game engine or production agent:
+
+```bash
+python tools/replay_diagnostics.py episodes.json --deck submission/deck.csv \
+  --deck-mode similarity --threshold .9 --format markdown -o replay.md
+python tools/replay_diagnostics.py normalized.csv --format csv
+```
+
+It groups wins/losses and action agreement by opponent, team, archetype, seat, and
+selection context. Deck matching is a card-count (multiset) exact match or configurable
+Jaccard overlap. An optional `--callback module:function` receives `(observation,
+legal_actions)` for heuristic comparison; without it, the tool compares explicitly
+recorded `heuristic_action`/`agent_action` candidates and otherwise reports the replay
+action as the offline baseline. Observation/action transitions are aligned only within
+the same or immediately following replay cell, and ambiguous cells are skipped.
 
 ## How an agent works
 
