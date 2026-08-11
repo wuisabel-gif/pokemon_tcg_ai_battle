@@ -115,7 +115,7 @@ def pokemon_score(pokemon: Pokemon) -> int:
     return score
 
 
-def agent(obs_dict: dict) -> list[int]:
+def _agent_impl(obs_dict: dict) -> list[int]:
     """Main Agent Function.
 
     Each element in the returned list must be >= 0 and < len(obs.select.option).
@@ -506,3 +506,23 @@ def agent(obs_dict: dict) -> list[int]:
             if card.id == Lunatone:
                 ability_used = True
     return desc_indices[:select.maxCount]
+
+
+def agent(obs_dict: dict) -> list[int]:
+    """Crash-safe wrapper. Any exception -> a legal fallback, never a forfeit.
+
+    ponytail: last-resort fallback only. The competition scores an exception as a
+    loss (and can fail submission validation entirely), so this guards the one
+    failure mode that heuristic tuning can't — an unhandled card/state crash.
+    """
+    try:
+        return _agent_impl(obs_dict)
+    except Exception:
+        # Legal fallback: return the deck if that's what's being asked for,
+        # otherwise pick the first `minCount` distinct offered options.
+        sel = obs_dict.get("select") if isinstance(obs_dict, dict) else None
+        if not sel:
+            return my_deck
+        n = len(sel.get("option") or [])
+        lo = sel.get("minCount") or 0
+        return list(range(min(lo, n)))
