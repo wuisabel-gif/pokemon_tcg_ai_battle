@@ -14,6 +14,30 @@ analysis.
 
 The live Kaggle notebook provides the hosted reference implementation and competition context.
 
+## Technical approach
+
+The agent operates in a **partially observable stochastic environment**: the opponent's
+private state is hidden, while shuffles, draws, and game effects introduce transition
+uncertainty. The deployed policy is currently a deck-conditioned heuristic policy that
+maps an observation and legal action set to a ranked action selection.
+
+The research pipeline extends this baseline with:
+
+- **Offline replay analysis and behavior cloning:** public trajectories are converted
+  into observation–action–outcome records, with episode-level separation reserved for
+  leakage-resistant evaluation.
+- **Policy/value approximation:** the optional transformer model estimates action
+  preferences and state value using sparse card, board, player-state, and candidate-action
+  features.
+- **PUCT-style Monte Carlo Tree Search:** the policy supplies priors while the value
+  function evaluates expanded states; bounded legal-action enumeration controls the
+  branching factor.
+- **Empirical evaluation:** local self-play, per-seat win rates, matchup breakdowns,
+  and confidence intervals are used to distinguish signal from stochastic variance.
+
+The neural MCTS path is an experimental research component and is not promoted to the
+submitted policy until it exceeds the heuristic baseline under controlled evaluation.
+
 ## What's here
 
 | Path | What it is |
@@ -27,6 +51,7 @@ The live Kaggle notebook provides the hosted reference implementation and compet
 | `tools/scout_public_code.py` | Ranks and downloads public competition notebooks for code-pattern analysis. |
 | `notebooks/kaggle_player_band_harvest.ipynb` | Compares replay-derived behavior across leaderboard performance bands. |
 | `notebooks/kaggle_score_monitor.ipynb` | Tracks public submission scores, leaderboard movement, and research signals over time. |
+| `notebooks/kaggle_submission_diagnostics.ipynb` | Connects Kaggle outcomes to local commits, archive hashes, and validation evidence. |
 | `notebooks/kaggle_submit.ipynb` | Validates, packages, and optionally submits the current agent to Kaggle. |
 | `sample_submission/` | The original untouched template from the competition. |
 | `EN_Card_Data.csv`, `JP_Card_Data.csv` | Card reference data. |
