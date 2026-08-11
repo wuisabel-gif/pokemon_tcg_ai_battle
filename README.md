@@ -2,6 +2,8 @@
 
 An AI player for the **[The Pokémon Company – PTCG AI Battle Challenge Simulation](https://www.kaggle.com/competitions/pokemon-tcg-ai-battle)**.
 
+**Competition host:** The Pokémon Company – PTCGABC Team
+
 The project combines a Mega Lucario ex deck-specific decision agent with local
 self-play evaluation, reproducible submission tooling, and replay-based strategy
 analysis.

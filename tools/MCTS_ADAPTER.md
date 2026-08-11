@@ -22,3 +22,18 @@ hard cap and validates `minCount`/`maxCount`. The adapter is not wired into
 `submission/main.py` yet: the existing crash-safe heuristic remains the
 production fallback until Linux-engine integration and model training are
 validated separately.
+
+## Optional model and encoders
+
+`mcts_model.py` ports the sample's transformer (`MyModel`) and its 24-word
+observation/action feature encoders. It imports neither PyTorch nor `cg` at
+module import time. Constructing `MyModel` requires PyTorch; calling
+`from_cg_api()` requires the current Kaggle `cg` API and derives card/attack
+vocabulary sizes from that installation. `eval_nn()` likewise imports torch
+only when invoked.
+
+This is an experimentation/training aid, not production submission code. Run
+training and evaluation in Linux/Kaggle with the matching `cg` package and
+`libcg.so`; API enum/card layouts and saved model shapes are version-sensitive.
+No weights are included, and this module is deliberately not wired into
+`submission/main.py`.
