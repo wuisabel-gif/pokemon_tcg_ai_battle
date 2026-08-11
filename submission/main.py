@@ -124,11 +124,20 @@ def _agent_impl(obs_dict: dict) -> list[int]:
     Returns:
         list[int]: A list of option index.
     """
+    global plan
+    global pre_turn
+    global ability_used
+
     obs = to_observation_class(obs_dict)
     if obs.select == None:
         # In the initial selection, the obs.select is None, and it is necessary to return the deck.
         # The deck is a list of 60 card IDs.
         # The deck must comply with the Pokémon Trading Card Game rules.
+        # Deck selection is the boundary between games, so clear tactical
+        # state before starting a new episode.
+        plan = AttackPlan()
+        pre_turn = 0
+        ability_used = False
         return my_deck
         
     state = obs.current
@@ -139,9 +148,6 @@ def _agent_impl(obs_dict: dict) -> list[int]:
     op_state = state.players[1 - my_index]
     my_prize = len(my_state.prize)
 
-    global plan
-    global pre_turn
-    global ability_used
     if pre_turn != state.turn:
         pre_turn = state.turn
         plan = AttackPlan()
