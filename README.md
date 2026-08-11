@@ -8,6 +8,10 @@ The project combines a Mega Lucario ex deck-specific decision agent with local
 self-play evaluation, reproducible submission tooling, and replay-based strategy
 analysis.
 
+**Current status:** the submitted policy is a rule-based heuristic agent. The replay
+learning, transformer policy/value model, and PUCT-MCTS components are research tools
+for candidate development; they are not currently part of the production submission.
+
 ![Pokémon TCG AI Battle](card.png)
 
 ## Featured Kaggle notebook
@@ -23,7 +27,7 @@ private state is hidden, while shuffles, draws, and game effects introduce trans
 uncertainty. The deployed policy is currently a deck-conditioned heuristic policy that
 maps an observation and legal action set to a ranked action selection.
 
-The research pipeline extends this baseline with:
+The research pipeline supports this baseline with:
 
 - **Offline replay analysis and behavior cloning:** public trajectories are converted
   into observation–action–outcome records, with episode-level separation reserved for
