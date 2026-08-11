@@ -8,6 +8,8 @@ The project combines a Mega Lucario ex deck-specific decision agent with local
 self-play evaluation, reproducible submission tooling, and replay-based strategy
 analysis.
 
+![Pokémon TCG AI Battle](card.png)
+
 ## Featured Kaggle notebook
 
 [**A Sample Rule-Based Agent — Mega Lucario ex Deck**](https://www.kaggle.com/code/kiyotah/a-sample-rule-based-agent-mega-lucario-ex-deck)
