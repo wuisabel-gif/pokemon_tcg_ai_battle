@@ -8,6 +8,12 @@ The project combines a Mega Lucario ex deck-specific decision agent with local
 self-play evaluation, reproducible submission tooling, and replay-based strategy
 analysis.
 
+## Featured Kaggle notebook
+
+[**A Sample Rule-Based Agent — Mega Lucario ex Deck**](https://www.kaggle.com/code/kiyotah/a-sample-rule-based-agent-mega-lucario-ex-deck)
+
+The live Kaggle notebook provides the hosted reference implementation and competition context.
+
 ## What's here
 
 | Path | What it is |
@@ -20,6 +26,7 @@ analysis.
 | `tools/mcts_adapter.py` | Engine-independent bounded MCTS and model interface based on the Kaggle sample. |
 | `tools/scout_public_code.py` | Ranks and downloads public competition notebooks for code-pattern analysis. |
 | `notebooks/kaggle_player_band_harvest.ipynb` | Compares replay-derived behavior across leaderboard performance bands. |
+| `notebooks/kaggle_score_monitor.ipynb` | Tracks public submission scores, leaderboard movement, and research signals over time. |
 | `notebooks/kaggle_submit.ipynb` | Validates, packages, and optionally submits the current agent to Kaggle. |
 | `sample_submission/` | The original untouched template from the competition. |
 | `EN_Card_Data.csv`, `JP_Card_Data.csv` | Card reference data. |

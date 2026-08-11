@@ -97,6 +97,19 @@ def analyze_download(directory: Path) -> dict[str, Any]:
             continue
     text = "\n".join(text_parts)
     lowered = text.lower()
+    signals = {
+        "mcts_rl": (r"\bmcts\b|monte.?carlo|puct|reinforcement|self.?play|policy.?value", 0),
+        "rule_based_agent": (r"def\s+agent\s*\(|rule.?based|heuristic|score.?option", 0),
+        "probabilistic_agent": (r"probabil|random.?agent|sampling|monte.?carlo", 0),
+        "replay_analysis": (r"replay|episode|trajectory|decision.?record", 0),
+        "deck_meta": (r"deck.?list|archetype|metagame|meta.?snapshot|card.?frequency", 0),
+        "engine_infrastructure": (r"search_begin|search_step|battle_start|battle_finish|docker", 0),
+    }
+    category_scores = {}
+    for category, (pattern, _) in signals.items():
+        category_scores[category] = len(re.findall(pattern, lowered))
+    categories = [name for name, score in category_scores.items() if score]
+    categories.sort(key=lambda name: category_scores[name], reverse=True)
     return {
         "notebooks": len(list(directory.rglob("*.ipynb"))),
         "code_lines": len(text.splitlines()),
@@ -104,7 +117,19 @@ def analyze_download(directory: Path) -> dict[str, Any]:
         "has_reinforcement_learning": bool(re.search(r"reinforcement|self.?play|policy.?value|actor.?critic", lowered)),
         "has_submission_agent": bool(re.search(r"def\s+agent\s*\(", text)),
         "has_search_api": "search_step" in lowered or "search_begin" in lowered,
+        "categories": categories or ["unclassified"],
+        "category_scores": category_scores,
     }
+
+
+def priority_score(row: dict[str, Any]) -> float:
+    """Score research value; never represents an official Kaggle medal."""
+    signals = row.get("code_signals", {})
+    category_scores = signals.get("category_scores", {})
+    technical = 20 * category_scores.get("mcts_rl", 0)
+    technical += 8 * category_scores.get("rule_based_agent", 0)
+    technical += 5 * category_scores.get("probabilistic_agent", 0)
+    return float(row.get("votes", 0)) + technical
 
 
 def main() -> None:
@@ -165,15 +190,18 @@ def main() -> None:
                 api.kernels_pull(row["ref"], path=str(target), metadata=True, quiet=True)
                 row["downloaded_to"] = str(target.relative_to(ROOT))
                 row["code_signals"] = analyze_download(target)
+                row["research_priority"] = priority_score(row)
             except Exception as exc:
                 row["download_error"] = str(exc)
             time.sleep(0.2)
+        ranked.sort(key=lambda row: row.get("research_priority", 0), reverse=True)
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
 
     print(f"Leaderboard players: {len(players)}")
     print(f"Public notebooks selected: {len(ranked)}")
     for row in ranked[:10]:
-        print(f"  {row['votes']:4d} votes  {row['author'][:24]:24s}  {row['public_url']}")
+        categories = ",".join(row.get("code_signals", {}).get("categories", []))
+        print(f"  {row['votes']:4d} votes  {row['author'][:24]:24s}  {categories:24s}  {row['public_url']}")
     print("Manifest:", manifest_path)
 
 
