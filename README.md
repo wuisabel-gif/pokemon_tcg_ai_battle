@@ -106,6 +106,7 @@ Mobile-friendly SVG exports are available here:
 | `tools/mcts_adapter.py` | Engine-independent bounded MCTS and model interface based on the Kaggle sample. |
 | `tools/scout_public_code.py` | Ranks and downloads public competition notebooks for code-pattern analysis. |
 | `tools/replay_diagnostics.py` | Pure-Python replay reports: matchup/context stats, same-deck filtering, and heuristic/public action comparison. |
+| `tools/expert_policy_diff.py` | Stdlib-only same-deck expert-vs-target decision differences for replay JSON files/directories. |
 | `notebooks/kaggle_player_band_harvest.ipynb` | Compares replay-derived behavior across leaderboard performance bands. |
 | `notebooks/kaggle_score_monitor.ipynb` | Tracks public submission scores, leaderboard movement, and research signals over time. |
 | `notebooks/kaggle_submission_diagnostics.ipynb` | Connects Kaggle outcomes to local commits, archive hashes, and validation evidence. |
@@ -134,6 +135,20 @@ legal_actions)` for heuristic comparison; without it, the tool compares explicit
 recorded `heuristic_action`/`agent_action` candidates and otherwise reports the replay
 action as the offline baseline. Observation/action transitions are aligned only within
 the same or immediately following replay cell, and ambiguous cells are skipped.
+
+### Same-deck expert policy differences
+
+```bash
+python tools/expert_policy_diff.py --replays data/episode_analysis/replays \
+  --deck baseline/deck.csv --threshold 1 --format markdown -o expert-diff.md
+```
+
+The analyzer accepts replay files or directories, prefers explicit expert metadata
+(otherwise the lowest numeric rank), aligns Kaggle player-cell observations at `t`
+with that player's action at `t+1`, and excludes 60-card deck-return actions. Reports
+group context, phase/turn, opponent/archetype, wins/losses, sorted action-list
+agreement, multiset overlap, and difference rates; it does not compare raw local
+option indices.
 
 ## How an agent works
 
