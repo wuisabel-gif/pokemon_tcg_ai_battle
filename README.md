@@ -59,10 +59,19 @@ evidence before the next policy change is submitted.
 
 ### Current decision
 
-The current priority is **Phase 1**. The latest lower Kaggle score should be treated as
-an evaluation signal, not proof that a particular heuristic is better or worse. Another
-submission should wait until optional-selection behavior and fallback counts have been
-tested locally against the opponent league.
+The current priority is **Phase 1**. The latest observed Kaggle result is an evaluation
+signal, not proof that a particular heuristic is better or worse. A full leaderboard
+band study found that most upper- and lower-ranked agents use different decks, so their
+raw actions are not valid labels for this Mega Lucario ex policy. The exact same-deck
+sample is currently too small for reliable imitation. No new Kaggle submission should
+be made until a targeted policy change has evidence behind it; resubmitting the
+unchanged heuristic would only add matchmaking noise.
+
+The latest replay review covers 42 episodes from submission `55443071`: 16 wins, 26
+losses, zero replay errors, and no confirmed first-player/second-player policy gap
+after correcting the replay interpretation. See
+[the replay review](reports/submission_55443071_replay_review.md) for the current
+evidence and limitations.
 
 ### Decision loop
 

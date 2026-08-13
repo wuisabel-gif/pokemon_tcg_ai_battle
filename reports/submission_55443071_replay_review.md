@@ -6,7 +6,7 @@ The latest replay-analysis workflow was run against submission `55443071`.
 
 | Metric | Result |
 |---|---:|
-| Current public score | **652.6** |
+| Current observed public score | **666.5** |
 | Completed episodes | **42** |
 | Wins | **16** |
 | Losses | **26** |
@@ -17,7 +17,9 @@ The latest replay-analysis workflow was run against submission `55443071`.
 | Replay download/parse failures | **0** |
 | Replay-recorded errors | **0** |
 
-The earlier 714.7 value was a temporary score observed while evaluation was still developing. The current public score is 652.6, so the historical peak should not be treated as the stable result.
+The earlier 714.7 value was a temporary score observed while evaluation was still
+developing. Scores continue to drift as episodes complete, so neither that peak nor
+the current 666.5 observation should be treated as a stable win-rate estimate.
 
 ## Important analysis correction
 
@@ -55,9 +57,21 @@ All 42 replays downloaded and parsed successfully, and no replay-recorded error 
 
 Wins averaged about 10 turns and losses about 11.5 turns. The difference is not enough to identify a reliable strategy cause. The sample includes many short games and should not be used to infer a general game-length rule.
 
+### 5. Leaderboard-band comparison is not yet a usable expert label
+
+The full leaderboard was paginated and sampled across upper, middle, and lower ranks.
+Most sampled agents used different 60-card decks, so their action choices cannot be
+transferred directly to this Mega Lucario ex policy. Only seven exact same-deck
+episodes were found in the initial sample, with two wins; that is insufficient for
+reliable behavior imitation. Additional replay downloads also encountered Kaggle API
+rate limiting, so the cohort should not be expanded aggressively without caching and
+exponential backoff.
+
 ## Decision
 
-Do **not** make a broad strategy rewrite or submit another agent version based only on this sample. The corrected evidence does not identify a specific policy defect.
+Do **not** make a broad strategy rewrite or submit another agent version based only on
+this sample. The corrected evidence does not identify a specific policy defect, and an
+unchanged resubmission would not improve the policy—it would only reroll matchmaking.
 
 Recommended next experiment:
 
