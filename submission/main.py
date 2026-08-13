@@ -44,6 +44,21 @@ Gravity_Mountain = 1252  # ×2
 Basic_Fighting_Energy = 6  # ×13
 
 
+ATTACK_IDS = {
+    Makuhita: (976, 977),
+    Hariyama: (978,),
+    Solrock: (980,),
+    Riolu: (981,),
+    Mega_Lucario_ex: (982, 983),
+}
+
+
+def planned_attack_id(pokemon_id: int, attack_index: int) -> int | None:
+    """Return the engine attack ID for this deck Pokémon and attack slot."""
+    ids = ATTACK_IDS.get(pokemon_id, ())
+    return ids[attack_index] if 0 <= attack_index < len(ids) else None
+
+
 class AttackPlan:
     attacker = -1
     target = -1
@@ -296,14 +311,11 @@ def _agent_impl(obs_dict: dict) -> list[int]:
                         # switching, or gusting must not receive this boost.
                         if (i == 0 and j == 0 and not more_energy
                                 and prize >= my_prize and prize > 0):
+                            expected_attack_id = planned_attack_id(my_pokemon.id, a)
                             for attack_option in select.option:
                                 if attack_option.type != OptionType.ATTACK:
                                     continue
-                                is_matching_attack = (
-                                    (a == 1 and attack_option.attackId == 983)
-                                    or (a == 0 and attack_option.attackId != 983)
-                                )
-                                if is_matching_attack:
+                                if attack_option.attackId == expected_attack_id:
                                     plan.immediate_win_attack_id = attack_option.attackId
                                     break
                         
