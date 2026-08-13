@@ -50,6 +50,7 @@ class AttackPlan:
     attack_index = -1
     remain_hp = -1
     energy = False
+    immediate_win_attack_id = -1
 
 
 plan = AttackPlan()
@@ -212,6 +213,7 @@ def _agent_impl(obs_dict: dict) -> list[int]:
 
         if state.turn >= 2:
             best_score = -1
+            plan.immediate_win_attack_id = -1
             for i, my_pokemon in enumerate(my_cards):
                 if i != 0 and not can_switch:
                     break
@@ -288,6 +290,22 @@ def _agent_impl(obs_dict: dict) -> list[int]:
                             
                         if len(op_state.prize) <= prize:
                             score = 50000
+
+                        # Mark only a currently legal attack that wins the
+                        # game immediately. Future lines that require energy,
+                        # switching, or gusting must not receive this boost.
+                        if (i == 0 and j == 0 and not more_energy
+                                and prize >= my_prize and prize > 0):
+                            for attack_option in select.option:
+                                if attack_option.type != OptionType.ATTACK:
+                                    continue
+                                is_matching_attack = (
+                                    (a == 1 and attack_option.attackId == 983)
+                                    or (a == 0 and attack_option.attackId != 983)
+                                )
+                                if is_matching_attack:
+                                    plan.immediate_win_attack_id = attack_option.attackId
+                                    break
                         
                         if i == 0:
                             score += 220
@@ -494,6 +512,8 @@ def _agent_impl(obs_dict: dict) -> list[int]:
                 score = -1
         elif o.type == OptionType.ATTACK:
             score = 1000
+            if o.attackId == plan.immediate_win_attack_id:
+                score = 100000
             if plan.attack_index == 1:
                 if o.attackId == 983:  # Mega Brave
                     score += 100
