@@ -130,7 +130,13 @@ def _actions(action: Any) -> tuple[str, ...]:
 
 
 def analyze(episodes: Iterable[dict], target_deck: Any = None, deck_mode: str = "exact", threshold: float = 1.0, callback: Callable | None = None) -> dict:
-    groups = defaultdict(lambda: {"decisions": 0, "wins": 0, "losses": 0, "action_matches": 0, "action_overlap": 0.0})
+    groups = defaultdict(lambda: {
+        "decisions": 0, "wins": 0, "losses": 0,
+        "comparisons": 0, "comparison_matches": 0,
+        "win_comparisons": 0, "loss_comparisons": 0,
+        "win_disagreements": 0, "loss_disagreements": 0,
+        "action_overlap": 0.0,
+    })
     episode_rows = []
     for number, ep in enumerate(episodes):
         if target_deck is not None and not same_deck(ep.get("deck", ep.get("decklist")), target_deck, deck_mode, threshold): continue
@@ -140,15 +146,51 @@ def analyze(episodes: Iterable[dict], target_deck: Any = None, deck_mode: str = 
         for row in decisions:
             key = tuple(str(row.get(k, "unknown")) for k in ("opponent", "team", "archetype", "seat", "context"))
             g = groups[key]; g["decisions"] += 1; g["wins"] += win; g["losses"] += loss
-            observed = _actions(row["action"])
-            candidate = next((row[k] for k in ("heuristic_action", "agent_action", "predicted_action") if k in row), row["action"])
-            predicted = _actions(callback(row["observation"], row.get("legal_actions", [])) if callback else candidate)
-            g["action_matches"] += observed == predicted
-            g["action_overlap"] += len(set(observed) & set(predicted)) / len(set(observed) | set(predicted)) if observed or predicted else 1.0
+            comparison = None
+            if callback:
+                comparison = callback(row["observation"], row.get("legal_actions", []))
+            else:
+                comparison = next((row[k] for k in
+                                   ("heuristic_action", "agent_action", "predicted_action")
+                                   if k in row), None)
+            if comparison is not None:
+                observed = _actions(row["action"])
+                predicted = _actions(comparison)
+                same = observed == predicted
+                overlap = (len(set(observed) & set(predicted)) /
+                           len(set(observed) | set(predicted))
+                           if observed or predicted else 1.0)
+                g["comparisons"] += 1
+                g["comparison_matches"] += same
+                g["action_overlap"] += overlap
+                if win:
+                    g["win_comparisons"] += 1
+                    g["win_disagreements"] += not same
+                elif loss:
+                    g["loss_comparisons"] += 1
+                    g["loss_disagreements"] += not same
     rows = []
     for key, g in groups.items():
         row = dict(zip(("opponent", "team", "archetype", "seat", "context"), key)); row.update(g); n = g["decisions"]
-        row["match_rate"] = g["action_matches"] / n if n else 0; row["mean_action_jaccard"] = g["action_overlap"] / n if n else 0; rows.append(row)
+        comparisons = g["comparisons"]
+        row["comparison_rate"] = comparisons / n if n else 0
+        row["match_rate"] = (g["comparison_matches"] / comparisons
+                              if comparisons else None)
+        row["mean_action_jaccard"] = (g["action_overlap"] / comparisons
+                                       if comparisons else None)
+        win_rate = (g["win_disagreements"] / g["win_comparisons"]
+                    if g["win_comparisons"] else None)
+        loss_rate = (g["loss_disagreements"] / g["loss_comparisons"]
+                     if g["loss_comparisons"] else None)
+        row["win_disagreement_rate"] = win_rate
+        row["loss_disagreement_rate"] = loss_rate
+        row["loss_disagreement_lift"] = (loss_rate - win_rate
+                                          if loss_rate is not None and win_rate is not None
+                                          else None)
+        rows.append(row)
+    rows.sort(key=lambda r: (r["loss_disagreement_lift"] is not None,
+                             r["loss_disagreement_lift"] or float("-inf"),
+                             r["comparisons"]), reverse=True)
     return {"groups": rows, "episodes": episode_rows, "matched_episodes": len(episode_rows), "decisions": sum(r["decisions"] for r in rows)}
 
 
@@ -156,10 +198,11 @@ def render(result: dict, fmt: str) -> str:
     if fmt == "json": return json.dumps(result, indent=2, sort_keys=True)
     rows = result["groups"]
     if fmt == "csv":
-        fields = ["opponent", "team", "archetype", "seat", "context", "decisions", "wins", "losses", "match_rate", "mean_action_jaccard"]
+        fields = ["opponent", "team", "archetype", "seat", "context", "decisions", "wins", "losses", "comparisons", "comparison_rate", "match_rate", "mean_action_jaccard", "win_disagreement_rate", "loss_disagreement_rate", "loss_disagreement_lift"]
         out = []; import io; s = io.StringIO(); w = csv.DictWriter(s, fieldnames=fields); w.writeheader(); w.writerows({k:r.get(k,"") for k in fields} for r in rows); return s.getvalue()
-    lines = ["# Replay diagnostics", "", f"Matched episodes: {result['matched_episodes']}  ", f"Decisions: {result['decisions']}", "", "| Opponent | Team | Archetype | Seat | Context | N | Wins | Losses | Match | Jaccard |", "|---|---|---|---:|---|---:|---:|---:|---:|---:|"]
-    lines += [f"| {r['opponent']} | {r['team']} | {r['archetype']} | {r['seat']} | {r['context']} | {r['decisions']} | {r['wins']} | {r['losses']} | {r['match_rate']:.1%} | {r['mean_action_jaccard']:.1%} |" for r in rows]
+    lines = ["# Replay diagnostics", "", f"Matched episodes: {result['matched_episodes']}  ", f"Decisions: {result['decisions']}", "", "| Opponent | Team | Archetype | Seat | Context | N | Comparisons | Match | Loss lift |", "|---|---|---|---:|---|---:|---:|---:|---:|"]
+    def pct(value): return "—" if value is None else f"{value:.1%}"
+    lines += [f"| {r['opponent']} | {r['team']} | {r['archetype']} | {r['seat']} | {r['context']} | {r['decisions']} | {r['comparisons']} ({r['comparison_rate']:.1%}) | {pct(r['match_rate'])} | {pct(r['loss_disagreement_lift'])} |" for r in rows]
     return "\n".join(lines) + "\n"
 
 

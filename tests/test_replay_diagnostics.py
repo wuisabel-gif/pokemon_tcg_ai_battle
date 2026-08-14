@@ -36,3 +36,23 @@ def test_callback_and_render_formats():
     assert result["groups"][0]["match_rate"] == 1
     assert "# Replay diagnostics" in rd.render(result, "markdown")
     assert "context" in rd.render(result, "csv")
+
+
+def test_loss_focused_disagreement_lift():
+    win = episode(["a"], result="win", action=[1])
+    win["steps"][0]["heuristic_action"] = [1]
+    loss = episode(["a"], result="loss", action=[1])
+    loss["steps"][0]["heuristic_action"] = [2]
+    result = rd.analyze([win, loss])
+    row = result["groups"][0]
+    assert row["comparisons"] == 2
+    assert row["win_disagreement_rate"] == 0
+    assert row["loss_disagreement_rate"] == 1
+    assert row["loss_disagreement_lift"] == 1
+
+
+def test_no_comparison_is_not_reported_as_agreement():
+    result = rd.analyze([episode(["a"], result="win")])
+    row = result["groups"][0]
+    assert row["comparisons"] == 0
+    assert row["match_rate"] is None
