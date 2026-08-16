@@ -182,6 +182,10 @@ def _agent_impl(obs_dict: dict) -> list[int]:
             
     can_attack = False
     if context == SelectContext.MAIN:
+        # Rebuild tactical state from this observation. A prior MAIN decision
+        # may have changed the hand, field, or legal target set; retaining its
+        # attacker/target can bias later actions when no new plan is valid.
+        plan = AttackPlan()
         can_switch = False
         can_op_switch = False
         can_use_mega_brave = False
