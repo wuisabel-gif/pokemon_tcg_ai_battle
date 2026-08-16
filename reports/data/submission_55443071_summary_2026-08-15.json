@@ -2,6 +2,7 @@
   "captured_at": "2026-08-15",
   "competition": "pokemon-tcg-ai-battle",
   "submission_id": 55443071,
+  "seat_resolution": "episode agent metadata matched by submission_id",
   "episodes_listed": 82,
   "replays_downloaded": 82,
   "outcomes": {"wins": 35, "losses": 47},

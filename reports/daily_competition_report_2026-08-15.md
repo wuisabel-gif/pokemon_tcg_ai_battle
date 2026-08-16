@@ -42,12 +42,18 @@ The useful comparison requirement is strict:
 - Outcome and play-order labels
 - Enough wins and losses from the same deck
 
-The initial exploratory band sample was too small for a reliable same-deck policy comparison, and replay downloads encountered API rate limiting. The conclusion is not that higher-ranked policies have nothing to teach us; it is that cross-deck action imitation would be invalid.
+The initial exploratory band sample was too small and insufficiently persisted for a
+reliable same-deck policy comparison, and replay downloads encountered API rate
+limiting. No exact-deck action conclusion is claimed from that sample. The conclusion
+is not that higher-ranked policies have nothing to teach us; it is that cross-deck
+action imitation would be invalid.
 
 ## Live success and failure analysis
 
-The current live sample for `55443071` contains 82 episodes. The persisted summary is
-in `reports/data/submission_55443071_summary_2026-08-15.json`:
+The current live sample for `55443071` contains 82 episodes. The player seat was
+resolved from the submission ID in episode metadata, not from the team name. The
+persisted summary is in
+`reports/data/submission_55443071_summary_2026-08-15.json`:
 
 - **35 wins / 47 losses**
 - **5,662 parsed decisions**
