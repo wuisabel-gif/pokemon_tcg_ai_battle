@@ -121,6 +121,7 @@ Mobile-friendly SVG exports are available here:
 | `notebooks/kaggle_submission_diagnostics.ipynb` | Connects Kaggle outcomes to local commits, archive hashes, and validation evidence. |
 | `notebooks/kaggle_episode_replay_analysis.ipynb` | Reads episode JSON to compare wins, losses, seats, opponents, turns, and action patterns. |
 | `reports/submission_55443071_replay_review.md` | Replay-based review of the latest high-scoring submission. |
+| `docs/development-workflow.md` | Production, candidate, evaluation, replay-analysis, and submission workflow. |
 | `notebooks/kaggle_submit.ipynb` | Validates, packages, and optionally submits the current agent to Kaggle. |
 | `sample_submission/` | The original untouched template from the competition. |
 | `EN_Card_Data.csv`, `JP_Card_Data.csv` | Card reference data. |
