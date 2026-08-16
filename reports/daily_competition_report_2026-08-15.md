@@ -4,7 +4,8 @@
 
 The current focus is the Simulation competition (`pokemon-tcg-ai-battle`). The active production submission remains `55443071`; no new agent has been submitted.
 
-A fresh leaderboard scan and live replay refresh were completed today:
+A fresh leaderboard scan and live replay refresh were completed today. Compact
+reproducible summaries are stored in `reports/data/`.
 
 | Metric | Today’s observation |
 |---|---:|
@@ -21,7 +22,9 @@ The score has moved down from earlier observations while the policy remained unc
 
 ## Upper, middle, and lower leaderboard study
 
-The leaderboard API was paginated so the study did not rely on the first page only. The current snapshot included representative ranks:
+The leaderboard API was paginated so the study did not rely on the first page only. The
+current snapshot included representative ranks; the persisted selection is in
+`reports/data/leaderboard_band_snapshot_2026-08-15.json`:
 
 | Band | Representative ranks | Observed scores |
 |---|---|---:|
@@ -43,7 +46,8 @@ The initial exploratory band sample was too small for a reliable same-deck polic
 
 ## Live success and failure analysis
 
-The current live sample for `55443071` contains 82 episodes:
+The current live sample for `55443071` contains 82 episodes. The persisted summary is
+in `reports/data/submission_55443071_summary_2026-08-15.json`:
 
 - **35 wins / 47 losses**
 - **5,662 parsed decisions**

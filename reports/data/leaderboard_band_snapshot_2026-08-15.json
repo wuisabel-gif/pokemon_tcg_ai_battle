@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-08-15",
+  "competition": "pokemon-tcg-ai-battle",
+  "leaderboard_rows_scanned": 4000,
+  "selected_ranks": [1, 5, 10, 500, 1000, 1500, 2000, 2800, 2988, 2990],
+  "selected": [
+    {"rank": 1, "team": "James Cox & Henry Chao", "score": 1266.7},
+    {"rank": 5, "team": "KawattaTaido", "score": 1212.4},
+    {"rank": 10, "team": "Luca", "score": 1175.8},
+    {"rank": 500, "team": "Linguist Wants Tech", "score": 871.2},
+    {"rank": 1000, "team": "weihao huang2004", "score": 793.7},
+    {"rank": 1500, "team": "zuoyinhan", "score": 734.5},
+    {"rank": 2000, "team": "daigakupotato", "score": 700.3},
+    {"rank": 2800, "team": "gibbonhugs", "score": 651.3},
+    {"rank": 2988, "team": "Isabella Wu", "score": 639.5},
+    {"rank": 2990, "team": "kmiya61212", "score": 639.4}
+  ],
+  "band_replay_status": {
+    "upper": "exploratory sample; different-deck actions excluded",
+    "middle": "small exact-deck signal; insufficient for imitation",
+    "lower": "exploratory sample; different-deck actions excluded"
+  },
+  "limitations": [
+    "This is a point-in-time leaderboard snapshot.",
+    "Rank and score can move while episodes complete.",
+    "Selected leaderboard rows are not a complete band population.",
+    "Replay downloads were rate-limited during exploratory band collection."
+  ]
+}
