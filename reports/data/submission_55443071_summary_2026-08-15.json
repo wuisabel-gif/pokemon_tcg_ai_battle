@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-08-15",
+  "competition": "pokemon-tcg-ai-battle",
+  "submission_id": 55443071,
+  "seat_resolution": "episode agent metadata matched by submission_id",
+  "episodes_listed": 82,
+  "replays_downloaded": 82,
+  "outcomes": {"wins": 35, "losses": 47},
+  "decisions": 5662,
+  "replay_errors": 0,
+  "play_order": {
+    "first": {"games": 54, "wins": 21, "win_rate": 0.3888888889},
+    "second": {"games": 28, "wins": 14, "win_rate": 0.5}
+  },
+  "timing": {
+    "first_attack_turn": {"wins_mean": 3.11, "losses_mean": 3.89},
+    "first_energy_turn": {"wins_mean": 1.46, "losses_mean": 1.64},
+    "first_evolution_turn": {"wins_mean": 3.69, "losses_mean": 3.66}
+  },
+  "optional_selection": {
+    "wins": {"optional": 364, "fixed": 2062, "rate": 0.1500412201},
+    "losses": {"optional": 469, "fixed": 2767, "rate": 0.1449320148}
+  },
+  "limitations": [
+    "Opponent strength and opening hands are not controlled.",
+    "The sample is observational and does not establish causality.",
+    "Raw replay JSON is intentionally not committed."
+  ]
+}
